@@ -253,7 +253,7 @@ const context = canvas.getContext("2d");
         context.clearRect(0, 0, largura, altura);
         if (estado.mostrarEixos) desenharEixos();
         desenharForma();
-        viewcube.style.transform = `rotateY(${-estado.anguloY}rad) rotateX(${-estado.anguloX}rad)`;
+        viewcube.style.transform = `rotateY(${-estado.anguloY}rad) rotateX(${estado.anguloX}rad)`;
         document.getElementById("leituraX").textContent = formatarGraus(estado.anguloX);
         document.getElementById("leituraY").textContent = formatarGraus(estado.anguloY);
     }
@@ -409,8 +409,8 @@ const context = canvas.getContext("2d");
     }
 
     function redefinir() {
-        estado.anguloX = -0.28;
-        estado.anguloY = 0.55;
+        estado.anguloX = 0;
+        estado.anguloY = 0;
         estado.animando = false;
         sliderDistancia.value = "3.8";
         estado.distancia = 3.8;
@@ -437,8 +437,8 @@ const context = canvas.getContext("2d");
         tras: [0, Math.PI],
         direita: [0, -Math.PI / 2],
         esquerda: [0, Math.PI / 2],
-        topo: [Math.PI / 2, 0],
-        base: [-Math.PI / 2, 0],
+        topo: [-Math.PI / 2, 0],
+        base: [Math.PI / 2, 0],
     };
     document.querySelectorAll(".viewcube-face").forEach((botao) => {
         botao.addEventListener("click", () => {
