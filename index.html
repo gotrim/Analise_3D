@@ -3,25 +3,109 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#edf1ec">
     <link rel="stylesheet" href="style.css">
-    <title>3D</title>
+    <title>Analise 3D | Laboratorio geometrico</title>
 </head>
 <body>
-    <h1>ANALISE 3D</h1>
-    <div class="principal">
-        <canvas id="base"></canvas>
-        <div class="controles">
-            <button id="bntVertices">○</button>
-            <button id="bntCim">⬏</button>
-            <button id="bntPos">⭡</button>
-            <button id="bntEsq">⭠</button>
-            <button id="bntPara" cl.ass="bntPara pause">⏸</button>
-            <button id="bntDir">⭢</button>
-            <button id="bntNeg">⭣</button>
-            <button id="bntBai">⬐</button>
-            <button id="bntReset">↺</button>
-        </div>
-    </div>
+    <header class="topo">
+        <div class="marca"><span class="marca-simbolo">A3</span><span>ESTUDO INTERATIVO</span></div>
+        <h1>Laboratorio <span>3D</span></h1>
+        <p>Explore formas, eixos e perspectiva em uma cena interativa.</p>
+    </header>
+
+    <main class="principal">
+        <section class="palco" aria-label="Visualizacao tridimensional">
+            <div class="palco-topo">
+                <div><span class="indicador"></span><span id="nomeForma">Cubo</span></div>
+                <span class="tag">PERSPECTIVA</span>
+            </div>
+            <div class="janela-canvas">
+                <canvas id="base" aria-label="Objeto 3D interativo"></canvas>
+                <div class="viewcube" aria-label="Orientacao da vista">
+                    <div class="viewcube-cubo" id="viewcube">
+                        <button class="viewcube-face frente" type="button" data-view="frente" aria-label="Vista frontal">FRENTE</button>
+                        <button class="viewcube-face tras" type="button" data-view="tras" aria-label="Vista traseira">TRAS</button>
+                        <button class="viewcube-face direita" type="button" data-view="direita" aria-label="Vista lateral direita">DIR</button>
+                        <button class="viewcube-face esquerda" type="button" data-view="esquerda" aria-label="Vista lateral esquerda">ESQ</button>
+                        <button class="viewcube-face face-superior" type="button" data-view="topo" aria-label="Vista superior">TOPO</button>
+                        <button class="viewcube-face base-view" type="button" data-view="base" aria-label="Vista inferior">BASE</button>
+                    </div>
+                </div>
+                <div class="legenda-eixos" aria-hidden="true">
+                    <span><i class="eixo-x"></i>X</span>
+                    <span><i class="eixo-y"></i>Y</span>
+                    <span><i class="eixo-z"></i>Z</span>
+                </div>
+            </div>
+            <div class="palco-rodape">
+                <span>Arraste os controles para observar a forma</span>
+                <span id="estadoAnimacao">ANIMACAO PAUSADA</span>
+            </div>
+        </section>
+
+        <aside class="painel" aria-label="Controles da cena">
+            <div class="painel-cabecalho">
+                <div><span class="sobretitulo">CENA ATUAL</span><h2>Controles</h2></div>
+                <button class="botao-icone" id="bntReset" type="button" title="Redefinir cena (R)" aria-label="Redefinir cena">↺</button>
+            </div>
+
+            <label class="campo-label" for="forma">Forma geometrica</label>
+            <div class="seletor-forma">
+                <select id="forma">
+                    <option value="cubo">Cubo</option>
+                    <option value="piramide">Piramide</option>
+                    <option value="prisma">Prisma pentagonal</option>
+                    <option value="criar">Criar forma livre...</option>
+                </select>
+                <button id="excluirForma" class="botao-excluir" type="button" hidden aria-label="Excluir forma selecionada" title="Excluir forma criada">Excluir</button>
+            </div>
+
+            <section id="painelCriacao" class="criador" hidden aria-label="Criar forma livre">
+                <div class="criador-titulo"><strong>DESENHO LIVRE</strong><span id="contagemPontos">0 pontos</span></div>
+                <p>Use o ViewCube ou as setas para mudar a vista entre os pontos. Sao necessarios pelo menos 3 pontos.</p>
+                <label class="campo-label" for="nomeFormaLivre">Nome da forma</label>
+                <input id="nomeFormaLivre" class="entrada-nome" type="text" maxlength="24" placeholder="Minha forma">
+                <label class="campo-label campo-espessura" for="espessuraForma">Espessura <span id="leituraEspessura">0.7</span></label>
+                <input id="espessuraForma" class="controle-distancia" type="range" min="0.2" max="1.5" step="0.1" value="0.7" aria-label="Espessura da forma">
+                <div class="botoes-criacao">
+                    <button id="apagarPonto" type="button" disabled>Apagar ponto</button>
+                    <button id="cancelarCriacao" type="button">Cancelar</button>
+                    <button id="concluirCriacao" type="button" disabled>Criar forma 3D</button>
+                </div>
+            </section>
+
+            <div class="divisor"></div>
+
+            <div class="secao-titulo"><h3>Visualizacao</h3><span>CAMADAS</span></div>
+            <label class="opcao"><span>Arestas</span><input id="mostrarArestas" type="checkbox" checked><i></i></label>
+            <label class="opcao"><span>Faces</span><input id="mostrarFaces" type="checkbox" checked><i></i></label>
+            <label class="opcao"><span>Vertices</span><input id="mostrarVertices" type="checkbox"><i></i></label>
+            <label class="opcao"><span>Eixos XYZ</span><input id="mostrarEixos" type="checkbox" checked><i></i></label>
+
+            <div class="divisor"></div>
+
+            <div class="secao-titulo"><h3>Rotacao</h3><span>PASSO 15°</span></div>
+            <div class="rotacao">
+                <button type="button" data-eixo="x" data-passo="-1" title="Inclinar para cima" aria-label="Inclinar para cima">↑</button>
+                <button type="button" data-eixo="y" data-passo="-1" title="Girar para a esquerda" aria-label="Girar para a esquerda">←</button>
+                <button class="botao-play" id="bntPara" type="button" title="Retomar animacao (Espaco)" aria-label="Retomar animacao">▶</button>
+                <button type="button" data-eixo="y" data-passo="1" title="Girar para a direita" aria-label="Girar para a direita">→</button>
+                <button type="button" data-eixo="x" data-passo="1" title="Inclinar para baixo" aria-label="Inclinar para baixo">↓</button>
+            </div>
+            <div class="leituras">
+                <div><span>ROTACAO X</span><strong id="leituraX">0°</strong></div>
+                <div><span>ROTACAO Y</span><strong id="leituraY">0°</strong></div>
+            </div>
+
+            <div class="divisor"></div>
+
+            <div class="secao-titulo"><h3>Distancia da camera</h3><strong id="leituraDistancia">3.8</strong></div>
+            <input id="distancia" class="controle-distancia" type="range" min="2" max="6" step="0.1" value="3.8" aria-label="Distancia da camera">
+            <div class="escala"><span>PERTO</span><span>LONGE</span></div>
+            <p class="atalhos">Setas giram a forma <b>·</b> Espaco pausa <b>·</b> R redefine</p>
+        </aside>
+    </main>
     <script src="index.js"></script>
 </body>
 </html>

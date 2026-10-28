@@ -1,363 +1,541 @@
-// ==========================================================
-// 1. Obtém os elementos do DOM após o carregamento da página
-// ==========================================================
-const base = document.getElementById("base");
-console.log(base);
-if (!base) {
-    console.error("Canvas não encontrado");
-    throw new Error("Canvas ausente");
-}
+const canvas = document.getElementById("base");
+const context = canvas.getContext("2d");
+    const selectForma = document.getElementById("forma");
+    const botaoAnimacao = document.getElementById("bntPara");
+    const botaoExcluir = document.getElementById("excluirForma");
+    const sliderDistancia = document.getElementById("distancia");
+    const viewcube = document.getElementById("viewcube");
+    const painelCriacao = document.getElementById("painelCriacao");
+    const botaoConcluir = document.getElementById("concluirCriacao");
+    const chaveFormasLivres = "analise3d-formas-livres";
 
-base.width = 400;
-base.height = 400;
-    // ___________________
-    //| Tamanho do canvas |
-    //|___________________|
-
-// ==========================================================
-// 2. Elementos de controle (botões)
-// ==========================================================
-const bntEsq = document.getElementById("bntEsq");
-const bntDir = document.getElementById("bntDir");
-const bntCim = document.getElementById("bntCim");
-const bntBai = document.getElementById("bntBai");
-const bntPos = document.getElementById("bntPos");
-const bntNeg = document.getElementById("bntNeg");
-const bntPara = document.getElementById("bntPara");
-const bntReset = document.getElementById("bntReset");
-const bntVertices = document.getElementById("bntVertices");
-
-if (!bntReset || !bntDir|| !bntPos || !bntNeg || !bntEsq || !bntBai || !bntCim || !bntPara || !bntVertices) {
-    console.error("Botões não encontrados");
-}
-
-// ==========================================================
-// 3. Contexto de desenho e variáveis globais
-// ==========================================================
-const con = base.getContext("2d");
-                            // _______________________________________________________________
-const FPS = 30;             //| Quadros por segundo                                           |
-const dt = 1 / FPS;         //| Intervalo de tempo entre quadros                              |
-const passo = Math.PI / 10; //| Passo de rotação manual (18°)                                 |
-const Zoom = 0.2;           //| Passo de zoom                                                 |
-const minDz = 0.2;          //| Distância mínima da câmera                                    |
-const maxDz = 5;            //| Distância máxima da câmera                                    |
-                            //|---------------------------------------------------------------|
-let dz = 1;                 //| Distância da câmera (ajusta o tamanho aparente do objeto)     |
-let angulo = 1;             //| Ângulo atual de rotação (Y)                                   |
-let anguloX = 0;            //| Ângulo atual de rotação (X)                                   |
-let direcao = 0;            //| 1 = horário, -1 = anti-horário, 0 = parado          (Y) (⬅)  |
-let direcaoX = 0;           //| 1 = horário, -1 = anti-horário, 0 = parado          (X) (⬆)  |
-let ultimaDir = 1;          //| Última direção ativa (para quando a pausa é desligada)        |
-let ultimaDirX = 1;         //| Última direção ativa (para quando a pausa é desligada)       |
-let pausa = false;          //| Controla se a animação de rotação está pausada                |
-let mostrarVertices = false;//| Exibe ou oculta os vértices (pontos)                          |
-                            //|_______________________________________________________________|
-
-const fundo = "#1A1A1A";
-const interior = "#72F2DB";
-
-// ==========================================================
-// 4. Vértices do Objeto
-// ==========================================================
-const vs = [
-    //                                    ___
-    { x:  0.125, y:      0, z:  0.25 },//| 0 |
-    { x: -0.125, y:      0, z:  0.25 },//| 1 |
-    { x: -0.062, y: -0.125, z:  0.25 },//| 2 |
-    { x:  0.062, y: -0.125, z:  0.25 },//| 3 |
-    { x:      0, y:  0.125, z:  0.25 },//| 4 |
-    //                                   |---|
-    { x:  0.125, y:      0, z: -0.25 },//| 5 |
-    { x: -0.125, y:      0, z: -0.25 },//| 6 |
-    { x: -0.062, y: -0.125, z: -0.25 },//| 7 |
-    { x:  0.062, y: -0.125, z: -0.25 },//| 8 |
-    { x:      0, y:  0.125, z: -0.25 },//| 9 |
-    //                                   |___|
-];
-
-// ==========================================================
-// 5. Arestas
-// ==========================================================
-const fs = [
-    [0, 4], [4, 1], [1, 2], [2, 3], [3, 0],
-    [5, 9], [9, 6], [6, 7], [7, 8], [8, 5],
-    [0, 5], [4, 9], [1, 6], [2, 7], [3, 8],
-];
-
-    // _________________________________________________________________________
-    //| O objeto é um prisma de base pentagonal (meio losango) com 10 vértices. |
-    //| As arestas definem as conexões entre eles, formando um sólido 3D.       |
-    //|-------------------------------------------------------------------------|
-    //| É possivel adicionar mais porém é um tanto complexo mas gera resultados |
-    //|_________________________________________________________________________|
-// ==========================================================
-// 6. Faces
-// ==========================================================
-const faces = [
-    [0, 4, 1, 2, 3],
-    [5, 9, 6, 7, 8],
-    [0, 4, 9, 5],
-    [4, 1, 6, 9],
-    [1, 2, 7, 6],
-    [2, 3, 8, 7],
-    [3, 0, 5, 8],
-]
-
-// ==========================================================
-// 7. Buffers reutilizáveis
-// ==========================================================
-                                    // __________________________________________________________________
-                                    //| Em vez de criar novos objetos a cada quadro, pré-alocamos arrays |
-                                    //| com objetos fixos que serão atualizados in-place.                |
-const numVerts = vs.length;         //|------------------------------------------------------------------|
-const lugar = new Array(numVerts);  //| coordenadas 3D após rotação e translação                         |
-const tela = new Array(numVerts);   //| coordenadas 2D após projeção e mapeamento para tela              |
-                                    //|__________________________________________________________________|
-for (let i = 0; i < numVerts; i++) {
-    lugar[i] = { x: 0, y: 0, z: 0 };
-    tela[i] = { x: 0, y: 0 };
-}
-
-// ==========================================================
-// 8. Funções de transformação 
-// ==========================================================
-function atualiza() {
-    const c = Math.cos(angulo);
-    const s = Math.sin(angulo);
-    const cX = Math.cos(anguloX);
-    const sX = Math.sin(anguloX);
-    
-    for (let i = 0; i < numVerts; i++) {
-        const v = vs[i];
-        let x = v.x;
-        let y = v.y;
-        let z = v.z;
-        
-        const x1 = x * c - z * s;                                         
-        const z1 = x * s + z * c;
-        const y1 = y; 
-
-        const y2 = y1 * cX - z1 * sX;                                         
-        const z2 = y1 * sX + z1 * cX;
-        const x2 = x1;
-        
-        const lug = lugar[i];
-        lug.x = x2;
-        lug.y = y2;
-        lug.z = z2 + dz;
-    }
-}
-
-function projetaTodos() {
-    const w = base.width;
-    const h = base.height;
-    for (let i = 0; i < numVerts; i++) {
-        const { x, y, z } = lugar[i];
-                                        // ______________________________________________
-        const zv = Math.max(z, 0.001);  //| Evita divisão por zero                       |
-                                        //|----------------------------------------------|
-        const px = x / zv;              //| Projeção perspectiva                         |
-        const py = y / zv;              //|                                              |
-                                        //|----------------------------------------------|
-        const t = tela[i];              //| Mapeamento para coordenadas de tela (pixels) |
-        t.x = (px + 1) * 0.5 * w;       //|______________________________________________|
-        t.y = (py + 1) * 0.5 * h;
-    }
-}
-
-function EleFaces() {
-    con.fillStyle = "rgba(114, 242, 219, 0.3)";
-
-    for (const face of faces) {
-        con.beginPath();
-        const primeiro = tela[face[0]];
-        con.moveTo(primeiro.x, primeiro.y);
-        for (let i = 1; i < face.length; i++) {
-            const p = tela[face[i]];
-            con.lineTo(p.x, p.y);
+    function lerFormasSalvas() {
+        try {
+            const salvas = JSON.parse(localStorage.getItem(chaveFormasLivres) || "{}");
+            return Object.fromEntries(Object.entries(salvas).filter(([id, forma]) => (
+                id.startsWith("livre-") && forma && typeof forma.nome === "string" &&
+                Array.isArray(forma.vertices) && Array.isArray(forma.faces) &&
+                forma.vertices.length >= 6 && forma.faces.length >= 5
+            )));
+        } catch {
+            return {};
         }
-        con.closePath();
-        con.fill();
-    }
-}
-
-// ==========================================================
-// 9. Funções de desenho
-// ==========================================================
-function limpar() {
-    con.fillStyle = fundo;
-    con.fillRect(0, 0, base.width, base.height);
-    // ________________________
-    //| Limpa o canvas (fundo) |
-    //|________________________|
-}
-
-function desenharArestas() {
-    con.strokeStyle = interior;
-    for (const [i, j] of fs) {
-        const p1 = tela[i];
-        const p2 = tela[j];
-        con.beginPath();
-        con.moveTo(p1.x, p1.y);
-        con.lineTo(p2.x, p2.y);
-        con.stroke();
-    }
-}
-
-function desenharVertices() {
-    if (!mostrarVertices) return;
-    con.fillStyle = interior;     // __________________
-    const tamanho = 10;           //| lado do quadrado |
-    for (const { x, y } of tela) {//|__________________|
-        con.fillRect(x - tamanho/2, y - tamanho/2, tamanho, tamanho);
-        // _____________________________________________________
-        //| Desenha um pequeno quadrado centralizado no vértice |
-        //|_____________________________________________________|
-    }
-}
-
-// ==========================================================
-// 10. Loop principal de animação
-// ==========================================================
-let ultimoTempo = 0;
-function loop(agora) {                      
-                                            // _______________________________________________________________
-    if (agora - ultimoTempo >= 1000 / FPS) {//| Controle de FPS para manter a mesma velocidade original       |
-        ultimoTempo = agora;                //|                                                               |
-                                            //|---------------------------------------------------------------|
-        angulo += direcao * Math.PI * dt;   //| Atualiza o ângulo conforme a direção (X)                      |
-                                            //|---------------------------------------------------------------|
-        anguloX += direcaoX * Math.PI * dt; //| Atualiza o ângulo conforme a direção (Y)                      |
-                                            //|---------------------------------------------------------------|
-        EleFaces();                         //| 1. Conecta as faces se baseando nas vertices                  |
-                                            //|---------------------------------------------------------------|
-        atualiza();                         //| 2. Transforma todos os vértices de uma só vez                 |
-                                            //|---------------------------------------------------------------|
-        projetaTodos();                     //| 3. Projeta todos os vértices para a tela                      |
-                                            //|---------------------------------------------------------------|
-        limpar();                           //| 4. Limpa o canvas                                             |
-                                            //|---------------------------------------------------------------|
-        EleFaces();                         //| 5. Conecta as faces se baseando nas vertices                  |
-                                            //|---------------------------------------------------------------|
-        desenharArestas();                  //| 6. Desenha as arestas usando os índices predefinidos          |
-                                            //|---------------------------------------------------------------|
-        desenharVertices();                 //| 7. Desenha os vértices (se ativado)                           |
-                                            //|_______________________________________________________________|
     }
 
-    requestAnimationFrame(loop);
-}
+    const formas = {
+        cubo: {
+            nome: "Cubo",
+            vertices: [
+                [-0.72, -0.72, -0.72], [0.72, -0.72, -0.72], [0.72, 0.72, -0.72], [-0.72, 0.72, -0.72],
+                [-0.72, -0.72, 0.72], [0.72, -0.72, 0.72], [0.72, 0.72, 0.72], [-0.72, 0.72, 0.72],
+            ],
+            faces: [[0, 3, 2, 1], [4, 5, 6, 7], [0, 1, 5, 4], [1, 2, 6, 5], [2, 3, 7, 6], [3, 0, 4, 7]],
+        },
+        piramide: {
+            nome: "Piramide",
+            vertices: [
+                [-0.82, -0.62, -0.72], [0.82, -0.62, -0.72], [0.82, -0.62, 0.72], [-0.82, -0.62, 0.72],
+                [0, 0.92, 0],
+            ],
+            faces: [[0, 3, 2, 1], [0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]],
+        },
+        prisma: criarPrismaPentagonal(),
+    };
 
-// ==========================================================
-// 11. Eventos dos botões
-// ==========================================================
+    function criarPrismaPentagonal() {
+        const vertices = [];
+        const faces = [];
+        const lados = 5;
 
-document.addEventListener('keydown', (event) => {
-    switch(event.key) {
-            case "ArrowUp":
-                Pos();
-                break;
-            case "ArrowDown":
-                Neg();
-                break;
-            case "ArrowRight":
-                Esq();
-                break;
-            case "ArrowLeft":
-                Dir();
-                break;
+        for (const z of [-0.62, 0.62]) {
+            for (let indice = 0; indice < lados; indice++) {
+                const angulo = -Math.PI / 2 + indice * (Math.PI * 2 / lados);
+                vertices.push([Math.cos(angulo) * 0.78, Math.sin(angulo) * 0.78, z]);
             }
-});
+        }
 
-function Esq(){
-    ultimaDir = -1;
-    ultimaDirX = 0;
-        if (pausa) {
-        angulo -= passo;
-    } else {
-        direcao = -1;
-        direcaoX = 0;
+        faces.push([0, 1, 2, 3, 4], [9, 8, 7, 6, 5]);
+        for (let indice = 0; indice < lados; indice++) {
+            const proximo = (indice + 1) % lados;
+            faces.push([indice, proximo, proximo + lados, indice + lados]);
+        }
+
+        return { nome: "Prisma pentagonal", vertices, faces };
     }
-}
 
-function Dir(){
-    ultimaDir = 1;
-    ultimaDirX = 0;
-    if (pausa) {
-        angulo += passo;
-    } else {
-        direcao = 1;
-        direcaoX = 0;
+    Object.assign(formas, lerFormasSalvas());
+    for (const [id, forma] of Object.entries(formas)) {
+        if (!id.startsWith("livre-")) continue;
+        const option = document.createElement("option");
+        option.value = id;
+        option.textContent = forma.nome;
+        selectForma.append(option);
     }
-}
 
-function Pos(){
-    ultimaDirX = 1;
-    ultimaDir = 0;
-    if (pausa) {
-        anguloX += passo;
-    } else {
-        direcaoX = 1;
-        direcao = 0;
+    const estado = {
+        anguloX: -0.28,
+        anguloY: 0.55,
+        distancia: Number(sliderDistancia.value),
+        animando: false,
+        mostrarArestas: true,
+        mostrarFaces: true,
+        mostrarVertices: false,
+        mostrarEixos: true,
+        modoCriacao: false,
+    };
+
+    const criacao = {
+        pontos: [],
+        formaAnterior: selectForma.value,
+        animandoAntes: true,
+        anguloXAnterior: 0,
+        anguloYAnterior: 0,
+    };
+    let formaSelecionadaAtual = selectForma.value;
+
+    let largura = 0;
+    let altura = 0;
+    let ultimoTempo = 0;
+
+    function redimensionar() {
+        const retangulo = canvas.getBoundingClientRect();
+        const escala = window.devicePixelRatio || 1;
+        largura = retangulo.width;
+        altura = retangulo.height;
+        canvas.width = Math.round(largura * escala);
+        canvas.height = Math.round(altura * escala);
+        context.setTransform(escala, 0, 0, escala, 0, 0);
+        desenhar();
     }
-}
 
-function Neg(){
-    ultimaDirX = -1;
-    ultimaDir = 0;
-    if (pausa) {
-        anguloX -= passo;
-    } else {
-        direcaoX = -1;
-        direcao = 0;
+    function transformar([x, y, z]) {
+        const cY = Math.cos(estado.anguloY);
+        const sY = Math.sin(estado.anguloY);
+        const cX = Math.cos(estado.anguloX);
+        const sX = Math.sin(estado.anguloX);
+        const rotacionadoX = x * cY + z * sY;
+        const rotacionadoZ = -x * sY + z * cY;
+
+        return {
+            x: rotacionadoX,
+            y: y * cX - rotacionadoZ * sX,
+            z: y * sX + rotacionadoZ * cX + estado.distancia,
+        };
     }
-}
 
-
-bntEsq.addEventListener("click", Esq);
-
-bntDir.addEventListener("click", Dir);
-
-bntPos.addEventListener("click", Pos);
-
-bntNeg.addEventListener("click", Neg);
-
-bntReset.addEventListener("click", () => {
-    angulo = 0;
-    anguloX = 0;
-    direcao = 0;
-    direcaoX = 0;
-});
-
-bntCim.addEventListener("click", () => {
-    dz = Math.max(dz - Zoom, minDz);
-});
-
-bntBai.addEventListener("click", () => {
-    dz = Math.min(dz + Zoom, maxDz);
-});
-
-bntPara.addEventListener("click", () => {
-                                    // _____________________________
-    pausa = !pausa;                 //| Alterna o estado de pausa   |
-    if (pausa) {                    //|-----------------------------|
-        direcao = 0;                //| Para a rotação automática   |
-        direcaoX = 0;               //| Ícone de "play"             | 
-        bntPara.textContent = "▸";  //|                             |
-    } else {                        //|-----------------------------|
-        direcao = ultimaDir;        //| Retoma com a última direção |
-        direcaoX = ultimaDirX;      //| Ícone de "pause"            |
-        bntPara.textContent = "⏸"; //|_____________________________|
+    function projetar(ponto) {
+        const focal = Math.min(largura, altura) * 0.92;
+        return {
+            x: largura / 2 + ponto.x / ponto.z * focal,
+            y: altura / 2 - ponto.y / ponto.z * focal,
+        };
     }
-});
 
-bntVertices.addEventListener("click", () => { //             _________________________________
-    mostrarVertices = !mostrarVertices;                   //| Alterna visibilidade dos pontos |
-    bntVertices.textContent = mostrarVertices ? "◉" : "○";//| Muda ícone                      |
-}); //                                                      |_________________________________|
+    function desenharEixos() {
+        const origem = projetar(transformar([0, 0, 0]));
+        const eixos = [
+            { nome: "X", fim: [1.05, 0, 0], cor: "#fb8063" },
+            { nome: "Y", fim: [0, 1.05, 0], cor: "#6cd6ae" },
+            { nome: "Z", fim: [0, 0, 1.05], cor: "#f2c65d" },
+        ];
 
-// ==========================================================
-// 11. Inicia a animação
-// ==========================================================
-requestAnimationFrame(loop);
+        for (const eixo of eixos) {
+            const fim = projetar(transformar(eixo.fim));
+            context.beginPath();
+            context.moveTo(origem.x, origem.y);
+            context.lineTo(fim.x, fim.y);
+            context.strokeStyle = eixo.cor;
+            context.lineWidth = 1.5;
+            context.globalAlpha = 0.8;
+            context.stroke();
+            context.fillStyle = eixo.cor;
+            context.font = "600 12px Trebuchet MS, sans-serif";
+            context.fillText(eixo.nome, fim.x + 5, fim.y - 5);
+        }
+        context.globalAlpha = 1;
+    }
+
+    function desenharForma() {
+        if (estado.modoCriacao) {
+            desenharPreviaCriacao();
+            return;
+        }
+
+        const forma = formas[selectForma.value];
+        const vertices3D = forma.vertices.map(transformar);
+        const vertices2D = vertices3D.map(projetar);
+
+        if (estado.mostrarFaces) {
+            const facesOrdenadas = forma.faces
+                .map((face) => ({
+                    indices: face,
+                    profundidade: face.reduce((soma, indice) => soma + vertices3D[indice].z, 0) / face.length,
+                }))
+                .sort((a, b) => b.profundidade - a.profundidade);
+
+            for (const face of facesOrdenadas) {
+                context.beginPath();
+                face.indices.forEach((indice, posicao) => {
+                    const ponto = vertices2D[indice];
+                    if (posicao === 0) context.moveTo(ponto.x, ponto.y);
+                    else context.lineTo(ponto.x, ponto.y);
+                });
+                context.closePath();
+                context.fillStyle = "rgba(91, 190, 160, 0.19)";
+                context.fill();
+            }
+        }
+
+        if (estado.mostrarArestas) {
+            const arestas = new Set();
+            for (const face of forma.faces) {
+                for (let indice = 0; indice < face.length; indice++) {
+                    const a = face[indice];
+                    const b = face[(indice + 1) % face.length];
+                    arestas.add(a < b ? `${a}-${b}` : `${b}-${a}`);
+                }
+            }
+
+            context.beginPath();
+            for (const aresta of arestas) {
+                const [a, b] = aresta.split("-").map(Number);
+                context.moveTo(vertices2D[a].x, vertices2D[a].y);
+                context.lineTo(vertices2D[b].x, vertices2D[b].y);
+            }
+            context.strokeStyle = "#a9f2d5";
+            context.lineWidth = 1.6;
+            context.stroke();
+        }
+
+        if (estado.mostrarVertices) {
+            for (const ponto of vertices2D) {
+                context.beginPath();
+                context.arc(ponto.x, ponto.y, 4, 0, Math.PI * 2);
+                context.fillStyle = "#f5c966";
+                context.fill();
+                context.strokeStyle = "#10201d";
+                context.lineWidth = 1.5;
+                context.stroke();
+            }
+        }
+    }
+
+    function desenharPreviaCriacao() {
+        const pontos = criacao.pontos.map((ponto) => projetar(transformar(ponto)));
+        if (pontos.length === 0) return;
+
+        context.beginPath();
+        context.moveTo(pontos[0].x, pontos[0].y);
+        for (let indice = 1; indice < pontos.length; indice++) {
+            context.lineTo(pontos[indice].x, pontos[indice].y);
+        }
+        if (pontos.length >= 3) context.closePath();
+        context.fillStyle = "rgba(91, 190, 160, 0.24)";
+        if (pontos.length >= 3) context.fill();
+        context.strokeStyle = "#a9f2d5";
+        context.lineWidth = 2;
+        context.stroke();
+
+        for (const ponto of pontos) {
+            context.beginPath();
+            context.arc(ponto.x, ponto.y, 5, 0, Math.PI * 2);
+            context.fillStyle = "#f2c65d";
+            context.fill();
+        }
+    }
+
+    function formatarGraus(angulo) {
+        const graus = Math.round(angulo * 180 / Math.PI);
+        return `${((graus % 360) + 360) % 360}°`;
+    }
+
+    function desenhar() {
+        context.clearRect(0, 0, largura, altura);
+        if (estado.mostrarEixos) desenharEixos();
+        desenharForma();
+        viewcube.style.transform = `rotateY(${-estado.anguloY}rad) rotateX(${-estado.anguloX}rad)`;
+        document.getElementById("leituraX").textContent = formatarGraus(estado.anguloX);
+        document.getElementById("leituraY").textContent = formatarGraus(estado.anguloY);
+    }
+
+    function atualizarForma() {
+        const forma = formas[selectForma.value];
+        document.getElementById("nomeForma").textContent = forma.nome;
+        botaoExcluir.hidden = !selectForma.value.startsWith("livre-");
+        desenhar();
+    }
+
+    function girar(eixo, direcao) {
+        const passo = Math.PI / 12 * direcao;
+        if (eixo === "x") estado.anguloX += passo;
+        else estado.anguloY += passo;
+        desenhar();
+    }
+
+    function atualizarControleAnimacao() {
+        botaoAnimacao.textContent = estado.animando ? "Ⅱ" : "▶";
+        botaoAnimacao.setAttribute("aria-label", estado.animando ? "Pausar animacao" : "Retomar animacao");
+        botaoAnimacao.title = estado.animando ? "Pausar animacao (Espaco)" : "Retomar animacao (Espaco)";
+        document.getElementById("estadoAnimacao").textContent = estado.animando ? "ANIMACAO ATIVA" : "ANIMACAO PAUSADA";
+    }
+
+    function alternarAnimacao() {
+        estado.animando = !estado.animando;
+        atualizarControleAnimacao();
+    }
+
+    function atualizarContagemPontos() {
+        document.getElementById("contagemPontos").textContent = `${criacao.pontos.length} pontos`;
+        botaoConcluir.disabled = criacao.pontos.length < 3;
+        document.getElementById("apagarPonto").disabled = criacao.pontos.length === 0;
+    }
+
+    function apagarUltimoPonto() {
+        if (criacao.pontos.length === 0) return;
+        criacao.pontos.pop();
+        atualizarContagemPontos();
+        desenhar();
+    }
+
+    function iniciarCriacao() {
+        criacao.formaAnterior = formaSelecionadaAtual;
+        criacao.animandoAntes = estado.animando;
+        criacao.anguloXAnterior = estado.anguloX;
+        criacao.anguloYAnterior = estado.anguloY;
+        criacao.pontos = [];
+        estado.modoCriacao = true;
+        estado.anguloX = 0;
+        estado.anguloY = 0;
+        if (estado.animando) alternarAnimacao();
+        painelCriacao.hidden = false;
+        canvas.classList.add("modo-criacao");
+        document.getElementById("estadoAnimacao").textContent = "MODO DE CRIACAO";
+        document.getElementById("nomeFormaLivre").value = "";
+        document.getElementById("espessuraForma").value = "0.7";
+        document.getElementById("leituraEspessura").textContent = "0.7";
+        atualizarContagemPontos();
+        desenhar();
+    }
+
+    function encerrarCriacao(idForma) {
+        estado.modoCriacao = false;
+        criacao.pontos = [];
+        estado.anguloX = criacao.anguloXAnterior;
+        estado.anguloY = criacao.anguloYAnterior;
+        painelCriacao.hidden = true;
+        canvas.classList.remove("modo-criacao");
+
+        if (idForma) {
+            selectForma.value = idForma;
+            formaSelecionadaAtual = idForma;
+            atualizarForma();
+        } else {
+            selectForma.value = criacao.formaAnterior;
+            formaSelecionadaAtual = criacao.formaAnterior;
+            document.getElementById("nomeForma").textContent = formas[formaSelecionadaAtual].nome;
+        }
+
+        if (estado.animando !== criacao.animandoAntes) alternarAnimacao();
+        document.getElementById("estadoAnimacao").textContent = estado.animando ? "ANIMACAO ATIVA" : "ANIMACAO PAUSADA";
+        desenhar();
+    }
+
+    function criarFormaLivre() {
+        if (criacao.pontos.length < 3) return;
+        const nomeDigitado = document.getElementById("nomeFormaLivre").value.trim();
+        const totalSalvas = Object.keys(formas).filter((id) => id.startsWith("livre-")).length;
+        const nome = nomeDigitado || `Forma livre ${totalSalvas + 1}`;
+        const profundidade = Number(document.getElementById("espessuraForma").value);
+        const quantidade = criacao.pontos.length;
+        const cX = Math.cos(estado.anguloX);
+        const sX = Math.sin(estado.anguloX);
+        const cY = Math.cos(estado.anguloY);
+        const sY = Math.sin(estado.anguloY);
+        const normal = [-cX * sY, sX, cX * cY];
+        const vertices = [
+            ...criacao.pontos.map(([x, y, z]) => [x - normal[0] * profundidade / 2, y - normal[1] * profundidade / 2, z - normal[2] * profundidade / 2]),
+            ...criacao.pontos.map(([x, y, z]) => [x + normal[0] * profundidade / 2, y + normal[1] * profundidade / 2, z + normal[2] * profundidade / 2]),
+        ];
+        const faces = [];
+
+        for (let indice = 1; indice < quantidade - 1; indice++) {
+            faces.push([0, indice, indice + 1]);
+            faces.push([quantidade, quantidade + indice + 1, quantidade + indice]);
+        }
+
+        for (let indice = 0; indice < quantidade; indice++) {
+            const proximo = (indice + 1) % quantidade;
+            faces.push([indice, proximo, proximo + quantidade, indice + quantidade]);
+        }
+
+        const idForma = `livre-${Date.now()}`;
+        formas[idForma] = { nome, vertices, faces };
+        const option = document.createElement("option");
+        option.value = idForma;
+        option.textContent = nome;
+        selectForma.append(option);
+
+        let salvo = true;
+        try {
+            const formasLivres = Object.fromEntries(Object.entries(formas).filter(([id]) => id.startsWith("livre-")));
+            localStorage.setItem(chaveFormasLivres, JSON.stringify(formasLivres));
+        } catch {
+            salvo = false;
+        }
+
+        encerrarCriacao(idForma);
+        if (!salvo) document.getElementById("estadoAnimacao").textContent = "FORMA DISPONIVEL NESTA SESSAO";
+    }
+
+    function excluirFormaSelecionada() {
+        const idForma = selectForma.value;
+        if (!idForma.startsWith("livre-")) return;
+        const forma = formas[idForma];
+        if (!window.confirm(`Excluir a forma "${forma.nome}"?`)) return;
+
+        delete formas[idForma];
+        const option = Array.from(selectForma.options).find((item) => item.value === idForma);
+        if (option) option.remove();
+        const formasLivres = Object.fromEntries(Object.entries(formas).filter(([id]) => id.startsWith("livre-")));
+        try {
+            localStorage.setItem(chaveFormasLivres, JSON.stringify(formasLivres));
+        } catch {
+            document.getElementById("estadoAnimacao").textContent = "EXCLUSAO SO NESTA SESSAO";
+        }
+
+        selectForma.value = "cubo";
+        formaSelecionadaAtual = "cubo";
+        atualizarForma();
+    }
+
+    function redefinir() {
+        estado.anguloX = -0.28;
+        estado.anguloY = 0.55;
+        estado.animando = false;
+        sliderDistancia.value = "3.8";
+        estado.distancia = 3.8;
+        document.getElementById("leituraDistancia").textContent = estado.distancia.toFixed(1);
+        atualizarControleAnimacao();
+        desenhar();
+    }
+
+    function animar(tempo) {
+        const delta = ultimoTempo ? Math.min((tempo - ultimoTempo) / 1000, 0.05) : 0;
+        ultimoTempo = tempo;
+        if (estado.animando) {
+            estado.anguloY += delta * 0.55;
+            desenhar();
+        }
+        requestAnimationFrame(animar);
+    }
+
+    document.querySelectorAll(".rotacao [data-eixo]").forEach((botao) => {
+        botao.addEventListener("click", () => girar(botao.dataset.eixo, Number(botao.dataset.passo)));
+    });
+    const orientacoesViewCube = {
+        frente: [0, 0],
+        tras: [0, Math.PI],
+        direita: [0, -Math.PI / 2],
+        esquerda: [0, Math.PI / 2],
+        topo: [Math.PI / 2, 0],
+        base: [-Math.PI / 2, 0],
+    };
+    document.querySelectorAll(".viewcube-face").forEach((botao) => {
+        botao.addEventListener("click", () => {
+            [estado.anguloX, estado.anguloY] = orientacoesViewCube[botao.dataset.view];
+            desenhar();
+        });
+    });
+
+    document.getElementById("mostrarArestas").addEventListener("change", (evento) => {
+        estado.mostrarArestas = evento.target.checked;
+        desenhar();
+    });
+    document.getElementById("mostrarFaces").addEventListener("change", (evento) => {
+        estado.mostrarFaces = evento.target.checked;
+        desenhar();
+    });
+    document.getElementById("mostrarVertices").addEventListener("change", (evento) => {
+        estado.mostrarVertices = evento.target.checked;
+        desenhar();
+    });
+    document.getElementById("mostrarEixos").addEventListener("change", (evento) => {
+        estado.mostrarEixos = evento.target.checked;
+        desenhar();
+    });
+
+    selectForma.addEventListener("change", () => {
+        if (selectForma.value === "criar") {
+            iniciarCriacao();
+            return;
+        }
+        formaSelecionadaAtual = selectForma.value;
+        atualizarForma();
+    });
+    botaoExcluir.addEventListener("click", excluirFormaSelecionada);
+    canvas.addEventListener("click", (evento) => {
+        if (!estado.modoCriacao || criacao.pontos.length >= 40) return;
+        const retangulo = canvas.getBoundingClientRect();
+        const focal = Math.min(largura, altura) * 0.92;
+        const xVista = (evento.clientX - retangulo.left - largura / 2) * estado.distancia / focal;
+        const yVista = -(evento.clientY - retangulo.top - altura / 2) * estado.distancia / focal;
+        const cX = Math.cos(estado.anguloX);
+        const sX = Math.sin(estado.anguloX);
+        const cY = Math.cos(estado.anguloY);
+        const sY = Math.sin(estado.anguloY);
+        const x = cY * xVista + sX * sY * yVista;
+        const y = cX * yVista;
+        const z = sY * xVista - sX * cY * yVista;
+        const primeiro = criacao.pontos[0];
+        if (criacao.pontos.length >= 3 && Math.hypot(x - primeiro[0], y - primeiro[1]) < 0.05) {
+            criarFormaLivre();
+            return;
+        }
+
+        const anterior = criacao.pontos[criacao.pontos.length - 1];
+        if (anterior && Math.hypot(x - anterior[0], y - anterior[1]) < 0.04) return;
+        criacao.pontos.push([x, y, z]);
+        atualizarContagemPontos();
+        desenhar();
+    });
+    document.getElementById("cancelarCriacao").addEventListener("click", () => encerrarCriacao(null));
+    document.getElementById("apagarPonto").addEventListener("click", apagarUltimoPonto);
+    botaoConcluir.addEventListener("click", criarFormaLivre);
+    document.getElementById("espessuraForma").addEventListener("input", (evento) => {
+        document.getElementById("leituraEspessura").textContent = Number(evento.target.value).toFixed(1);
+    });
+    botaoAnimacao.addEventListener("click", alternarAnimacao);
+    document.getElementById("bntReset").addEventListener("click", redefinir);
+    sliderDistancia.addEventListener("input", (evento) => {
+        estado.distancia = Number(evento.target.value);
+        document.getElementById("leituraDistancia").textContent = estado.distancia.toFixed(1);
+        desenhar();
+    });
+
+    document.addEventListener("keydown", (evento) => {
+        if (estado.modoCriacao) {
+            if (evento.key === "Escape") encerrarCriacao(null);
+            if (evento.target.matches("input, select, button")) return;
+            if (evento.key === "Backspace") {
+                evento.preventDefault();
+                apagarUltimoPonto();
+                return;
+            }
+        } else if (evento.target.matches("input, select, button")) {
+            return;
+        }
+        if (evento.key === "ArrowUp") girar("x", -1);
+        else if (evento.key === "ArrowDown") girar("x", 1);
+        else if (evento.key === "ArrowLeft") girar("y", -1);
+        else if (evento.key === "ArrowRight") girar("y", 1);
+        else if (evento.code === "Space") {
+            evento.preventDefault();
+            alternarAnimacao();
+        } else if (evento.key.toLowerCase() === "r") redefinir();
+    });
+
+    document.getElementById("leituraDistancia").textContent = estado.distancia.toFixed(1);
+    atualizarControleAnimacao();
+    new ResizeObserver(redimensionar).observe(canvas);
+    redimensionar();
+    requestAnimationFrame(animar);
